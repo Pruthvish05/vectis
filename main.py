@@ -29,23 +29,31 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Vectis AI Firewall Proxy", lifespan=lifespan)
 
-
 def scrub_pii(text: str) -> tuple[str, dict]:
-    """Scans incoming prompt text for PII patterns, replaces them with tokens,
-    and returns both the scrubbed text and the vault mapping.
+    """
+    Scans incoming prompt text against multiple PII/secret regex patterns,
+    tokenizes matches by category, and returns the scrubbed text + vault.
     """
     vault = {}
-    email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
-    found_emails = list(set(re.findall(email_pattern, text)))
-
     scrubbed_text = text
-    for index, email in enumerate(found_emails):
-        token = f"[EMAIL_{index}]"
-        vault[token] = email
-        scrubbed_text = scrubbed_text.replace(email, token)
+
+    # Category -> Regex Pattern mapping
+    patterns = {
+        "EMAIL": r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+        "PHONE": r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b",
+        "CREDIT_CARD": r"\b(?:\d{4}[-\s]?){3}\d{4}\b",
+        "API_KEY": r"\b(?:sk-[a-zA-Z0-9]{20,T?|AKIA[0-9A-Z]{16})\b",
+    }
+
+    for category, regex in patterns.items():
+        found_matches = list(set(re.findall(regex, scrubbed_text)))
+        
+        for index, match in enumerate(found_matches):
+            token = f"[{category}_{index}]"
+            vault[token] = match
+            scrubbed_text = scrubbed_text.replace(match, token)
 
     return scrubbed_text, vault
-
 
 def unmask_pii(text: str, vault: dict) -> str:
     """Replaces tokens in the outbound response with original values from vault."""
