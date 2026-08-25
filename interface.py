@@ -6,17 +6,21 @@ import urllib.request
 
 def send_request():
   prompt = prompt_box.get("1.0", tk.END).strip()
+  model = model_entry.get().strip() or "llama3.2"
+
   if not prompt:
     return
 
   send_btn.config(state=tk.DISABLED, text="Processing...")
   output_box.delete("1.0", tk.END)
-  output_box.insert(tk.END, "Sending request through Vectis proxy...\n")
+  output_box.insert(
+      tk.END, f"Sending request through Vectis using model '{model}'...\n"
+  )
 
   def worker():
     url = "http://localhost:8080/chat/completions"
     payload = {
-        "model": "llama3.2",
+        "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
     }
@@ -50,7 +54,15 @@ def update_output(text):
 # --- GUI Layout ---
 root = tk.Tk()
 root.title("Vectis Firewall Prototype")
-root.geometry("520x450")
+root.geometry("520x500")
+
+# Model Input Section
+tk.Label(root, text="Model Name:", font=("Arial", 10, "bold")).pack(
+    anchor="w", padx=10, pady=(10, 2)
+)
+model_entry = tk.Entry(root)
+model_entry.pack(fill="x", padx=10, pady=2)
+model_entry.insert(0, "llama3.2")
 
 # Input Section
 tk.Label(
