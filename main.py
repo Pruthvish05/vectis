@@ -5,8 +5,8 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 # Upstream destination (Local Ollama running in OpenAI mode)
-UPSTREAM_URL = "http://localhost:11434/v1"
-
+UPSTREAM_URL = "https://api.groq.com/openai/v1"
+API_KEY = "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"
 EXCLUDED_HEADERS = {
     "content-length",
     "host",
@@ -16,8 +16,6 @@ EXCLUDED_HEADERS = {
 }
 
 client: httpx.AsyncClient = None
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global client
@@ -84,119 +82,6 @@ async def stream_processor(upstream_response: httpx.Response, vault: dict):
         yield buffer.encode("utf-8")
 
 
-# --- WEB UI FRONTEND ROUTE ---
-@app.get("/", response_class=HTMLResponse)
-async def serve_ui():
-    html_content = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Vectis AI Firewall Dashboard</title>
-        <style>
-            * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-            body { background-color: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
-            .container { max-width: 900px; margin: 0 auto; }
-            .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #334155; padding-bottom: 1rem; margin-bottom: 2rem; }
-            .badge { background: #0284c7; color: #fff; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.85rem; font-weight: 600; }
-            .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
-            label { font-weight: 600; display: block; margin-bottom: 0.5rem; color: #94a3b8; }
-            textarea, input { width: 100%; background: #0f172a; border: 1px solid #475569; color: #fff; padding: 0.75rem; border-radius: 8px; font-size: 1rem; margin-bottom: 1rem; }
-            button { background: #2563eb; color: #fff; border: none; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; border-radius: 8px; cursor: pointer; width: 100%; transition: background 0.2s; }
-            button:hover { background: #1d4ed8; }
-            .response-box { background: #090d16; border: 1px solid #334155; border-radius: 8px; padding: 1rem; min-height: 150px; white-space: pre-wrap; font-family: monospace; line-height: 1.5; color: #38bdf8; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h2>🛡️ Vectis AI Firewall</h2>
-                <span class="badge">Local Engine Active</span>
-            </div>
-
-            <div class="card">
-                <label for="model">LLM Model Name:</label>
-                <input type="text" id="model" value="llama3.2">
-
-                <label for="prompt">Your Prompt (Include sensitive emails/phones to test PII masking):</label>
-                <textarea id="prompt" rows="4">Write a brief email to john.doe@company.com and call 555-123-4567 confirming their order.</textarea>
-
-                <button id="sendBtn" onclick="sendPrompt()">Send Through Vectis Proxy</button>
-            </div>
-
-            <div class="card">
-                <label>Unmasked Response Stream (Real-Time Output):</label>
-                <div id="output" class="response-box">Waiting for prompt...</div>
-            </div>
-        </div>
-
-        <script>
-            async function sendPrompt() {
-                const prompt = document.getElementById('prompt').value;
-                const model = document.getElementById('model').value;
-                const outputEl = document.getElementById('output');
-                const btn = document.getElementById('sendBtn');
-
-                outputEl.textContent = '🛡️ Vectis intercepting prompt...\n';
-                btn.disabled = true;
-
-                try {
-                    const response = await fetch('/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'text/event-stream'
-                        },
-                        body: JSON.stringify({
-                            model: model,
-                            messages: [{ role: 'user', content: prompt }],
-                            stream: true
-                        })
-                    });
-
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder('utf-8');
-                    let buffer = '';
-
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-
-                        buffer += decoder.decode(value, { stream: true });
-                        const lines = buffer.split('\\n');
-                        buffer = lines.pop();
-
-                        for (const line of lines) {
-                            const trimmed = line.trim();
-                            if (!trimmed || trimmed === 'data: [DONE]') continue;
-
-                            if (trimmed.startsWith('data: ')) {
-                                try {
-                                    const json = JSON.parse(trimmed.slice(6));
-                                    const content = json.choices?.[0]?.delta?.content || '';
-                                    outputEl.textContent += content;
-                                } catch (e) {
-                                    outputEl.textContent += trimmed;
-                                }
-                            } else {
-                                outputEl.textContent += trimmed + '\\n';
-                            }
-                        }
-                    }
-                } catch (err) {
-                    outputEl.textContent += '\\n❌ Error: ' + err.message;
-                } finally {
-                    btn.disabled = false;
-                }
-            }
-        </script>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
-
-
 # --- PROXY INTERCEPTOR ROUTE ---
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def proxy_interceptor(request: Request, path: str):
@@ -217,6 +102,7 @@ async def proxy_interceptor(request: Request, path: str):
         for key, value in request.headers.items()
         if key.lower() not in EXCLUDED_HEADERS
     }
+    request_headers["Authorization"] = f"Bearer {API_KEY}"
 
     req = client.build_request(
         method=request.method,
