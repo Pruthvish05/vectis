@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 
 # Upstream destination (Local Ollama running in OpenAI mode)
 UPSTREAM_URL = "https://api.groq.com/openai/v1"
-API_KEY = "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"
+API_KEY = "YOUR_API_KEY_HERE"  # Replace with your actual
 EXCLUDED_HEADERS = {
     "content-length",
     "host",
