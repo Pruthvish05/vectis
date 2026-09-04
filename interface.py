@@ -6,7 +6,7 @@ import urllib.request
 
 def send_request():
   prompt = prompt_box.get("1.0", tk.END).strip()
-  model = model_entry.get().strip() or "llama3.2"
+  model = model_entry.get().strip() or "llama3.2:3b"
 
   if not prompt:
     return
@@ -18,7 +18,7 @@ def send_request():
   )
 
   def worker():
-    url = "http://localhost:8080/chat/completions"
+    url = "http://localhost:8000/chat/completions"
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
@@ -62,7 +62,7 @@ tk.Label(root, text="Model Name:", font=("Arial", 10, "bold")).pack(
 )
 model_entry = tk.Entry(root)
 model_entry.pack(fill="x", padx=10, pady=2)
-model_entry.insert(0, "llama3.2")
+model_entry.insert(0, "llama3.2:3b")
 
 # Input Section
 tk.Label(

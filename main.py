@@ -2,11 +2,12 @@ from contextlib import asynccontextmanager
 import re
 import httpx
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 
-# Upstream destination (Local Ollama running in OpenAI mode)
-UPSTREAM_URL = "https://api.groq.com/openai/v1"
-API_KEY = "YOUR_API_KEY_HERE"  # Replace with your actual
+# Upstream destination (Ollama's OpenAI-compatible API)
+UPSTREAM_URL = "http://127.0.0.1:11434/v1"
+API_KEY = "ollama"
 EXCLUDED_HEADERS = {
     "content-length",
     "host",
@@ -25,6 +26,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Vectis AI Firewall Proxy", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def scrub_pii(text: str) -> tuple[str, dict]:
